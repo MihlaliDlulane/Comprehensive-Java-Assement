@@ -5,6 +5,8 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -909,6 +911,288 @@ public class EmployeeTest {
                 emp.addSkill("Java");
                 emp.toString();
             }, "Method operations should be safe even with null fields");
+        }
+    }
+
+    @Nested
+    @DisplayName("10. POLYMORPHISM AND INHERITANCE TESTS")
+    class PolymorphismTests {
+
+        // Create subclasses for testing
+        static class Manager extends Employee {
+            private List<Employee> directReports;
+            private double bonusPercentage;
+
+            public Manager(String id, String name, double salary, Department department, double bonusPercentage) {
+                super(id, name, salary, department);
+                this.bonusPercentage = bonusPercentage;
+                this.directReports = new ArrayList<>();
+            }
+
+            public void addDirectReport(Employee employee) {
+                directReports.add(employee);
+            }
+
+            public List<Employee> getDirectReports() {
+                return new ArrayList<>(directReports);
+            }
+
+            public double getBonusPercentage() {
+                return bonusPercentage;
+            }
+
+            // Override to include bonus in total compensation
+            public double getTotalCompensation() {
+                return getSalary() * (1 + bonusPercentage);
+            }
+
+            @Override
+            public String toString() {
+                return "Manager{" +
+                        "id='" + getId() + '\'' +
+                        ", name='" + getName() + '\'' +
+                        ", salary=" + getSalary() +
+                        ", totalComp=" + getTotalCompensation() +
+                        ", reports=" + directReports.size() +
+                        '}';
+            }
+
+            @Override
+            public Manager deepClone() {
+                Manager cloned = new Manager(getId(), getName(), getSalary(),
+                        getDepartment() != null ? getDepartment().clone() : null, bonusPercentage);
+                for (String skill : getSkills()) {
+                    cloned.addSkill(skill);
+                }
+                // Note: Not cloning direct reports (business decision)
+                return cloned;
+            }
+        }
+
+        static class Contractor extends Employee {
+            private double hourlyRate;
+            private int hoursWorked;
+            private LocalDate contractEndDate;
+
+            public Contractor(String id, String name, double hourlyRate, Department department, LocalDate contractEndDate) {
+                super(id, name, 0, department); // Salary is calculated
+                this.hourlyRate = hourlyRate;
+                this.hoursWorked = 0;
+                this.contractEndDate = contractEndDate;
+            }
+
+            public void logHours(int hours) {
+                this.hoursWorked += hours;
+                setSalary(hourlyRate * hoursWorked); // Update salary based on hours
+            }
+
+            public boolean isContractExpired() {
+                return LocalDate.now().isAfter(contractEndDate);
+            }
+
+            @Override
+            public String toString() {
+                return "Contractor{" +
+                        "id='" + getId() + '\'' +
+                        ", name='" + getName() + '\'' +
+                        ", hourlyRate=" + hourlyRate +
+                        ", hoursWorked=" + hoursWorked +
+                        ", contractEnd=" + contractEndDate +
+                        '}';
+            }
+        }
+
+        private Manager manager1;
+        private Contractor contractor1;
+        private Employee regularEmp;
+
+        @BeforeEach
+        void setUp() {
+            manager1 = new Manager("M001", "Alice Manager", 100000, dept1, 0.2); // 20% bonus
+            contractor1 = new Contractor("C001", "Bob Contractor", 150, dept1, LocalDate.now().plusMonths(6));
+            regularEmp = new Employee("E001", "Charlie Employee", 75000, dept1);
+
+            // Set up relationships
+            manager1.addDirectReport(regularEmp);
+            manager1.addDirectReport(contractor1);
+        }
+
+        @Test
+        @DisplayName("10.1 Polymorphic collections")
+        public void testPolymorphicCollections() {
+            List<Employee> allEmployees = new ArrayList<>();
+            allEmployees.add(manager1);
+            allEmployees.add(contractor1);
+            allEmployees.add(regularEmp);
+
+            assertEquals(3, allEmployees.size(), "Should handle different employee types");
+
+            // All can be treated as Employee
+            for (Employee emp : allEmployees) {
+                assertNotNull(emp.getId());
+                assertNotNull(emp.getName());
+                assertTrue(emp.getSalary() >= 0);
+            }
+        }
+
+        @Test
+        @DisplayName("10.2 Polymorphic HashMap storage")
+        public void testPolymorphicHashMap() {
+            Map<Employee, String> employeeRoles = new HashMap<>();
+
+            employeeRoles.put(manager1, "Department Head");
+            employeeRoles.put(contractor1, "Frontend Developer");
+            employeeRoles.put(regularEmp, "Backend Developer");
+
+            // Should work with base class reference
+            Employee lookupManager = new Employee("M001", "Different Name", 0, null);
+            assertEquals("Department Head", employeeRoles.get(lookupManager),
+                    "Should find manager using Employee reference with same ID");
+        }
+
+        @Test
+        @DisplayName("10.3 Sorting mixed employee types")
+        public void testPolymorphicSorting() {
+            contractor1.logHours(500); // Sets salary to 75000
+
+            List<Employee> employees = Arrays.asList(manager1, contractor1, regularEmp);
+            Collections.sort(employees);
+
+            // Should sort by salary regardless of type
+            assertEquals(contractor1, employees.get(0)); // 75000
+            assertEquals(regularEmp, employees.get(1)); // 75000
+            assertEquals(manager1, employees.get(2)); // 100000
+        }
+
+        @Test
+        @DisplayName("10.4 toString() polymorphism")
+        public void testPolymorphicToString() {
+            Employee empRef = manager1; // Manager stored as Employee reference
+            String result = empRef.toString();
+
+            assertTrue(result.contains("Manager"),
+                    "Should use overridden toString() from Manager class");
+            assertTrue(result.contains("reports="),
+                    "Should include Manager-specific information");
+        }
+
+        @Test
+        @DisplayName("10.5 Cloning with inheritance")
+        public void testPolymorphicCloning() throws CloneNotSupportedException {
+            Employee clonedAsEmployee = manager1.clone();
+
+            assertTrue(clonedAsEmployee instanceof Manager,
+                    "Clone should preserve actual type");
+
+            Manager clonedManager = (Manager) clonedAsEmployee;
+            assertEquals(manager1.getBonusPercentage(), clonedManager.getBonusPercentage(),
+                    "Manager-specific fields should be cloned");
+        }
+
+        @Test
+        @DisplayName("10.6 Deep clone with polymorphism")
+        public void testPolymorphicDeepClone() {
+            Manager cloned = manager1.deepClone();
+
+            assertNotSame(manager1, cloned);
+            assertEquals(manager1.getBonusPercentage(), cloned.getBonusPercentage());
+            assertEquals(0, cloned.getDirectReports().size(),
+                    "Business decision: don't clone reporting relationships");
+        }
+
+        @Test
+        @DisplayName("10.7 instanceof and type checking")
+        public void testTypeChecking() {
+            List<Employee> employees = Arrays.asList(manager1, contractor1, regularEmp);
+
+            long managerCount = employees.stream()
+                    .filter(emp -> emp instanceof Manager)
+                    .count();
+
+            long contractorCount = employees.stream()
+                    .filter(emp -> emp instanceof Contractor)
+                    .count();
+
+            assertEquals(1, managerCount);
+            assertEquals(1, contractorCount);
+        }
+
+        @Test
+        @DisplayName("10.8 Polymorphic behavior differences")
+        public void testBehaviorDifferences() {
+            // Contractor salary changes with hours
+            Contractor contractor = new Contractor("C002", "Dana", 100, dept1,
+                    LocalDate.now().plusDays(30));
+
+            assertEquals(0, contractor.getSalary());
+            contractor.logHours(40);
+            assertEquals(4000, contractor.getSalary());
+
+            // Manager has total compensation
+            Manager manager = new Manager("M002", "Eva", 100000, dept1, 0.15);
+            assertEquals(115000, manager.getTotalCompensation());
+        }
+
+        @Test
+        @DisplayName("10.9 Liskov Substitution Principle")
+        public void testLiskovSubstitution() {
+            // Subclasses should be substitutable for base class
+            Employee[] employees = {manager1, contractor1, regularEmp};
+
+            for (Employee emp : employees) {
+                // All base class operations should work
+                assertDoesNotThrow(() -> {
+                    emp.getName();
+                    emp.getSalary();
+                    emp.addSkill("Testing");
+                    emp.equals(emp);
+                    emp.hashCode();
+                    emp.compareTo(emp);
+                    emp.toString();
+                });
+            }
+        }
+
+        @Test
+        @DisplayName("10.10 Polymorphic HashSet behavior")
+        public void testPolymorphicHashSet() {
+            Set<Employee> uniqueEmployees = new HashSet<>();
+
+            uniqueEmployees.add(manager1);
+            uniqueEmployees.add(new Manager("M001", "Different", 90000, dept2, 0.1));
+
+            assertEquals(1, uniqueEmployees.size(),
+                    "Manager with same ID should be considered equal to prevent duplicates");
+
+            uniqueEmployees.add(contractor1);
+            uniqueEmployees.add(regularEmp);
+
+            assertEquals(3, uniqueEmployees.size());
+        }
+
+        @Test
+        @DisplayName("10.11 Method overriding verification")
+        public void testMethodOverriding() {
+            // Verify toString is overridden
+            assertNotEquals(regularEmp.toString(), manager1.toString(),
+                    "Manager should have different toString implementation");
+
+            // Verify that overridden methods are actually called
+            Employee polyRef = manager1;
+            assertTrue(polyRef.toString().contains("Manager"),
+                    "Polymorphic call should use actual type's method");
+        }
+
+        @Test
+        @DisplayName("10.12 Inheritance and null safety")
+        public void testInheritanceNullSafety() {
+            Manager managerWithNulls = new Manager(null, null, 100000, null, 0.1);
+
+            assertDoesNotThrow(() -> {
+                managerWithNulls.toString();
+                managerWithNulls.equals(manager1);
+                managerWithNulls.hashCode();
+            }, "Subclasses should maintain null safety");
         }
     }
 }

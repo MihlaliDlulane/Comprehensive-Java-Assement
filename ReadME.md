@@ -1398,6 +1398,208 @@ employee.setId("NEW");  // Employee now "lost" in map
 
 Remember: Defensive programming is like wearing a seatbelt - seems unnecessary until it saves you from disaster!
 
+## 10. POLYMORPHISM AND INHERITANCE TESTS
+
+### What We're Testing:
+These tests verify that your Employee class works correctly in an inheritance hierarchy and maintains proper behavior when used polymorphically. This section tests real-world scenarios where different types of employees (Manager, Contractor) are treated as base Employee objects.
+
+### Understanding Polymorphism in This Context:
+
+#### Test Setup - The Class Hierarchy:
+```
+Employee (base class)
+├── Manager (adds: directReports, bonusPercentage)
+└── Contractor (adds: hourlyRate, contractEndDate)
+```
+
+Each subclass represents a real business entity with specific behaviors while maintaining the Employee contract.
+
+#### 10.1 **Polymorphic Collections**
+- **What it means**: Different employee types can be stored in the same collection
+- **Why it matters**: Real systems need to process all employees together
+- **Key insight**: All subclasses can be treated as Employee
+- **Real-world use**: Company-wide reports, bulk operations, payroll processing
+
+#### 10.2 **Polymorphic HashMap Storage**
+- **What it tests**: Inheritance doesn't break HashMap functionality
+- **Critical point**: A Manager with ID "M001" should equal an Employee with ID "M001"
+- **Why**: equals()/hashCode() contract must be preserved in subclasses
+- **Common bug**: Overriding equals() in subclass breaks symmetry
+
+#### 10.3 **Sorting Mixed Employee Types**
+- **What it tests**: compareTo() works across inheritance hierarchy
+- **Key behavior**: All employees sort by salary, regardless of type
+- **Design principle**: Subclasses should not change ordering logic
+- **Business scenario**: Salary reports mixing regular employees and contractors
+
+#### 10.4 **toString() Polymorphism**
+- **What it tests**: Correct method is called at runtime (dynamic dispatch)
+- **Key concept**: Even when stored as Employee reference, Manager.toString() is called
+- **Why it matters**: Logging and debugging show actual type information
+- **Virtual method invocation**: Java's core OOP feature in action
+
+#### 10.5-10.6 **Cloning with Inheritance**
+- **What it tests**: Clone operations preserve actual runtime type
+- **Critical requirement**: Cloning a Manager returns a Manager, not Employee
+- **Common mistake**: Using `new Employee()` in clone instead of `super.clone()`
+- **Deep clone challenge**: Subclass-specific fields need proper handling
+
+#### 10.7 **Type Checking and instanceof**
+- **What it tests**: Runtime type information is preserved
+- **Use cases**:
+    - Filtering employees by type
+    - Applying type-specific business rules
+    - Conditional processing
+- **Design consideration**: Overuse of instanceof can indicate poor design
+
+#### 10.8 **Behavioral Differences**
+- **What it tests**: Subclasses can have different behaviors while maintaining contracts
+- **Examples shown**:
+    - Contractor: Salary calculated from hours worked
+    - Manager: Total compensation includes bonus
+- **Key principle**: Specialization through inheritance
+
+#### 10.9 **Liskov Substitution Principle (LSP)**
+- **What it means**: Subclasses must be usable wherever base class is expected
+- **Why critical**: Violating LSP breaks polymorphism
+- **What's tested**: All Employee operations work on all subclasses
+- **Common violations**:
+    - Throwing exceptions in overridden methods
+    - Changing method contracts
+    - Breaking invariants
+
+#### 10.10 **Polymorphic Set Behavior**
+- **What it tests**: Set uniqueness works across inheritance
+- **Key point**: Two Managers with same ID are still duplicates
+- **Why it matters**: Collections rely on consistent equals() behavior
+- **Design rule**: Don't break equals() symmetry in subclasses
+
+### Key Polymorphism Concepts:
+
+**Dynamic Dispatch**:
+- Method called depends on actual object type, not reference type
+- Happens at runtime, not compile time
+- Foundation of polymorphic behavior
+
+**Inheritance Contract**:
+- Subclasses must honor base class contracts
+- equals(), hashCode(), compareTo() must remain consistent
+- Don't break what works in the parent
+
+**Type Substitutability**:
+```java
+Employee emp = new Manager(...);  // Substitution
+emp.toString();  // Calls Manager's toString()
+emp.getSalary(); // Works as expected
+```
+
+### Common Polymorphism Pitfalls:
+
+1. **Breaking equals() Symmetry**:
+```java
+// BAD: Manager only equals other Managers
+public boolean equals(Object obj) {
+    if (!(obj instanceof Manager)) return false;
+    // This breaks emp.equals(mgr) vs mgr.equals(emp)
+}
+```
+
+2. **Incorrect Clone Implementation**:
+```java
+// BAD: Loses type information
+public Employee clone() {
+    return new Employee(this.id, this.name, ...);
+}
+
+// GOOD: Preserves type
+public Employee clone() {
+    return (Employee) super.clone();
+}
+```
+
+3. **Changing Comparison Logic**:
+```java
+// BAD: Manager compares differently
+public int compareTo(Employee other) {
+    // Comparing by bonus instead of salary
+    // Breaks ordering consistency
+}
+```
+
+### Real-World Scenarios:
+
+**Payroll Processing**:
+```java
+List<Employee> allStaff = company.getAllEmployees();
+for (Employee emp : allStaff) {
+    // Works for all types - Manager, Contractor, Regular
+    double pay = emp.getSalary();
+    processPay(emp, pay);
+}
+```
+
+**Reporting Systems**:
+```java
+Map<Department, List<Employee>> byDept = employees.stream()
+    .collect(Collectors.groupingBy(Employee::getDepartment));
+// Works regardless of employee types
+```
+
+**Access Control**:
+```java
+if (employee instanceof Manager) {
+    grantManagerAccess((Manager) employee);
+}
+```
+
+### Design Principles Being Tested:
+
+1. **Open/Closed Principle**:
+    - Open for extension (new employee types)
+    - Closed for modification (base Employee unchanged)
+
+2. **Dependency Inversion**:
+    - Code depends on Employee abstraction
+    - Not on concrete Manager/Contractor
+
+3. **Interface Segregation**:
+    - Each type adds only what it needs
+    - No forcing unnecessary methods
+
+### Questions to Consider:
+- Should Manager.equals(Employee) return true if IDs match?
+- How do you clone a Manager while preserving its direct reports?
+- Should Contractor ordering consider contract end date?
+- When is instanceof checking appropriate vs. polymorphic methods?
+- How do you maintain equals() symmetry with inheritance?
+
+### Why This Matters:
+
+**System Flexibility**:
+- Add new employee types without changing existing code
+- Process all employees uniformly when needed
+- Specialize behavior where appropriate
+
+**Maintenance Benefits**:
+- Changes to subclasses don't break base functionality
+- Clear contracts make debugging easier
+- Type safety catches errors at compile time
+
+**Business Modeling**:
+- Reflects real organizational structures
+- Supports complex business rules
+- Enables type-specific processing
+
+### Testing Your Implementation:
+When adding inheritance to Employee:
+1. Ensure all base class tests still pass
+2. Verify polymorphic collections work
+3. Check that cloning preserves types
+4. Maintain equals/hashCode/compareTo contracts
+5. Test with mixed-type scenarios
+
+Remember: Good inheritance creates an "is-a" relationship where subclasses can seamlessly substitute for the base class while adding their own specialized behaviors!
+
 ## Important Design Consideration: Equality Strategy
 
 ### Understanding Object Equality in Java
